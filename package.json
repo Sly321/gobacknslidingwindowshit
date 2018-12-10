@@ -1,0 +1,15 @@
+{
+  "name": "gobacknslidingwindowshit",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:Sly321/gobacknslidingwindowshit.git",
+  "author": "Sly321 <liebigsv@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "ts-node": "^7.0.1",
+    "typescript": "^3.2.2"
+  },
+  "scripts": {
+    "start": "ts-node ./GoBackNArq.ts"
+  }
+}
