@@ -1,44 +1,37 @@
-import { Package } from "./Package"
+import chalk from "chalk"
+
+function dropIt(): boolean {
+	return Math.random() <= 0.5
+}
 
 export class Receiver {
-	private _lastSuccessfulPackage: Package
-	private failed: boolean = false
-
-	public send(dataPackage: Package): Promise<Package> {
-		// DEBUG
-		if (dataPackage.sequence === 2 && !this.failed) {
-			this.failed = true
-			return Promise.reject(dataPackage.sequence)
+	private lastSuccessFul: number = -1
+	public send(dataPackage: number): number {
+		if (dropIt()) {
+			console.log(`< < < < ${chalk.red("Rejected")}: ${dataPackage}, lastSuccessful: ${chalk.magenta("" + this.lastSuccessFul)}`)
+			throw (this.lastSuccessFul)
 		}
 
-		return new Promise((res, rej) => {
-			console.log(`Receiver: receive > ${dataPackage.sequence}`)
-			setTimeout(() => {
-				// if it is really the next data package
-				if (dataPackage.sequence === this.lastSequence + 1) {
-					// use setter
-					console.log(`Receiver: Success > last package was: ${this.lastSequence}`)
-					console.log(`Receiver: Success > new is: ${dataPackage.sequence}`)
-					this.lastSuccessfulPackage = dataPackage
-					res(dataPackage)
-				}
-			}, 3000)
-		})
+		if (this.isNext(dataPackage)) {
+			console.log(`< < < < ${chalk.green("Confirmed")}: ` + dataPackage)
+			return this.lastSuccessFul = dataPackage
+		} else {
+			console.log(`< < < < ${chalk.yellow("IS NOT NEXT")}: ` + dataPackage)
+			return this.lastSuccessFul
+		}
 	}
 
-	private set lastSuccessfulPackage(pkg: Package) {
-		this._lastSuccessfulPackage = pkg
-	}
-
-	private get lastSequence(): number {
-		return this._lastSuccessfulPackage ? this._lastSuccessfulPackage.sequence : -1
+	private isNext(sequence: number) {
+		return this.lastSuccessFul + 1 === sequence
 	}
 }
+
 
 export class Sender {
 	private base: number = 0
 	private next: number = 0
 	private interval: number
+	// private framesPerSecond: number = 1000 / 83
 
 	constructor(private receiver: Receiver, private window: number = 5, private timeout: number = 11000) { }
 
@@ -46,38 +39,30 @@ export class Sender {
 		clearInterval(this.interval)
 
 		while (this.next - this.base < this.window) {
+			console.log(`> > > > Sender: Sending > ${this.toString()}`)
 			this.send(this.next++)
 		}
 
-		console.log(`Sender: waiting... > ${this.toString()}`)
-
 		this.interval = setInterval(() => {
 			this.next = this.base // reset
-			console.log(`Sender: timeout > ${this.toString()}`)
+			console.log(`TIMEOUT TIMEOUT ----- > > > > Sender: timeout > ${this.toString()}`)
 			this.start()
 		}, this.timeout)
 	}
 
 	private send(num: number) {
-		const dataPackage: Package = {
-			sequence: num
-		}
+		try {
+			const responseNumber = this.receiver.send(num)
+			if (this.base === responseNumber) {
+				this.base++ // das bestätigte paket war die base
+			} else {
+				console.log(`> > > > Sender: Next Resetted ${responseNumber}`)
+				this.next = responseNumber + 1 // ein paket ging verloren
+			}
 
-		console.log(`Sender: Sending > ${this.toString()}`)
+			this.start()
 
-		this.receiver.send(dataPackage)
-			.then(pkg => {
-				if (this.base === pkg.sequence) {
-					this.base++ // das bestätigte paket war die base
-				} else {
-					this.next = pkg.sequence + 1 // ein paket ging verloren
-				}
-
-				console.log(`Sender: Confirmed > ${this.toString()}`)
-
-				this.start()
-			})
-			.catch((e) => console.log("DEBUG: Rejected " + e))
+		} catch (_) { }
 	}
 
 	public toString(): string {
