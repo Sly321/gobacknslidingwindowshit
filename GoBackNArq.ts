@@ -1,14 +1,22 @@
 import chalk from "chalk"
 
 function dropIt(): boolean {
-	return Math.random() <= 0.5
+	return Math.random() >= 0.5
+}
+
+const statistics = {
+	sendTotal: 0,
+	resend: 0,
+	dropped: 0,
+	ack: 0,
 }
 
 export class Receiver {
-	private lastSuccessFul: number = -1
+	private lastSuccessFul: number = 0
 	public send(dataPackage: number): number {
 		if (dropIt()) {
 			console.log(`< < < < ${chalk.red("Rejected")}: ${dataPackage}, lastSuccessful: ${chalk.magenta("" + this.lastSuccessFul)}`)
+			statistics.dropped++
 			throw (this.lastSuccessFul)
 		}
 
@@ -30,43 +38,63 @@ export class Receiver {
 export class Sender {
 	private base: number = 0
 	private next: number = 0
-	private interval: number
-	// private framesPerSecond: number = 1000 / 83
+	private packageInterval: number
+	private framesPerSecond: number = 1000 / 83
 
-	constructor(private receiver: Receiver, private window: number = 5, private timeout: number = 11000) { }
+	constructor(private receiver: Receiver, private window: number = 5, private total: number = 300) { }
 
 	public start() {
-		clearInterval(this.interval)
+		console.time("package-transmission")
 
-		while (this.next - this.base < this.window) {
-			console.log(`> > > > Sender: Sending > ${this.toString()}`)
-			this.send(this.next++)
-		}
+		this.packageInterval = setInterval(() => {
+			if (this.base === this.total) {
+				return this.printStats() || clearInterval(this.packageInterval) // damit will ich nur ärgern
+			}
 
-		this.interval = setInterval(() => {
-			this.next = this.base // reset
-			console.log(`TIMEOUT TIMEOUT ----- > > > > Sender: timeout > ${this.toString()}`)
-			this.start()
-		}, this.timeout)
+			if (this.next - this.base < this.window && this.next <= this.total) {
+				console.log(`> > > > Sender: Sending > ${this.toString()}`)
+				statistics.sendTotal++ // statistics
+				this.send(++this.next)
+			} else {
+				// something went completly wrong, everything in window range was dropped
+				statistics.resend += this.next - this.base // statistics
+				this.next = this.base // reset
+			}
+		}, this.framesPerSecond)
 	}
 
 	private send(num: number) {
 		try {
 			const responseNumber = this.receiver.send(num)
-			if (this.base === responseNumber) {
-				this.base++ // das bestätigte paket war die base
+			if (this.base < responseNumber) {
+				this.base = responseNumber // die response ist weiter
 			} else {
-				console.log(`> > > > Sender: Next Resetted ${responseNumber}`)
-				this.next = responseNumber + 1 // ein paket ging verloren
+				// simulated, the receiver asks for a new package of number .. because he send an package that is lower than base
+				// my english sucks
+				statistics.resend += this.next - responseNumber // statistics
+				statistics.ack++ // statistics
+				this.next = responseNumber
 			}
-
-			this.start()
-
 		} catch (_) { }
 	}
 
 	public toString(): string {
 		return `{ base: ${this.base}, next: ${this.next} }`
+	}
+
+	// statistics
+	// statistics
+	// statistics
+	private printStats() {
+		console.log(chalk.bgGreen("< < < < < STATISTICS > > > > >"))
+		console.log(chalk.red("sendTotal: " + statistics.sendTotal))
+		console.log(chalk.red("resend: " + statistics.resend))
+		console.log(chalk.red("dropped: " + statistics.dropped))
+		console.log(chalk.red("ACK: " + statistics.ack))
+		console.log(chalk.green("packages transfered: " + this.base))
+		console.timeEnd("package-transmission")
+		console.log(chalk.bgGreen("< < < < STATISTICS END > > > >"))
+		return false
 	}
 }
 
